@@ -49,8 +49,27 @@ cd /work/10692/ayuj/Noisy-Point-Cloud-Reconstruction/third_party/pointflow
 echo "Setting up local scratch data..."
 TMP_DATA_DIR="/tmp/$SLURM_JOB_ID/data"
 mkdir -p $TMP_DATA_DIR
-echo "Copying data from data/ShapeNetCore.v2.PC15k to $TMP_DATA_DIR..."
-cp -r data/ShapeNetCore.v2.PC15k $TMP_DATA_DIR/
+
+ZIP_FILE="data/ShapeNetCore.v2.PC15k.zip"
+if [ -f "$ZIP_FILE" ]; then
+    echo "Found archive $ZIP_FILE. Copying and extracting to local scratch..."
+    cp $ZIP_FILE $TMP_DATA_DIR/
+    
+    # Save current directory
+    PUSHD_DIR=$PWD
+    cd $TMP_DATA_DIR
+    
+    echo "Extracting zip file..."
+    unzip -q ShapeNetCore.v2.PC15k.zip
+    
+    # Return to original directory
+    cd $PUSHD_DIR
+else
+    echo "Archive $ZIP_FILE not found. Falling back to recursive copy (slower)..."
+    echo "Copying data from data/ShapeNetCore.v2.PC15k to $TMP_DATA_DIR..."
+    cp -r data/ShapeNetCore.v2.PC15k $TMP_DATA_DIR/
+fi
+
 echo "Data copy complete."
 
 # ------------------------------
