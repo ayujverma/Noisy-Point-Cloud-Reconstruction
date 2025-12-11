@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J chair_ae_h100             # Job name
+#SBATCH -J airplane_ae_h100             # Job name
 #SBATCH -o logs/slurm_h100_%j.out    # Stdout output file
 #SBATCH -e logs/slurm_h100_%j.err    # Stderr error file
 #SBATCH -p gpu-h100                  # GPU partition (H100) - Adjust if needed (e.g. 'gh' on Vista)
@@ -29,7 +29,7 @@ export PYTHONUNBUFFERED=1
 # Print job info
 # ------------------------------
 echo "============================================================================"
-echo "CHAIR AE TRAINING JOB (H100 - 2 GPUs)"
+echo "CHAIR AE TRAINING JOB (H100 - 1 GPU)"
 echo "============================================================================"
 echo "Job started at: $(date)"
 echo "Job ID: $SLURM_JOB_ID"
@@ -57,7 +57,7 @@ mkdir -p logs output checkpoints
 # ------------------------------
 # Run Autoencoder training script
 # ------------------------------
-bash ./scripts/shapenet_chair_ae_dist.sh
+bash ./scripts/shapenet_airplane_ae_dist.sh h100
 
 # ------------------------------
 # Job finished

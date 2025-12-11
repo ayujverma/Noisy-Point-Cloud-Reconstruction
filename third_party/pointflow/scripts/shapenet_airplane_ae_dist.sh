@@ -1,5 +1,12 @@
 #! /bin/bash
 
+# Check if a suffix argument is provided
+if [ -n "$1" ]; then
+  SUFFIX="-$1"
+else
+  SUFFIX=""
+fi
+
 cate="airplane"
 dims="512-512-512"
 latent_dims="256-256"
@@ -10,10 +17,10 @@ batch_size=256
 lr=2e-3
 epochs=4000
 ds=shapenet15k
-log_name="ae/${ds}-cate${cate}"
+log_name="ae/${ds}-cate${cate}${SUFFIX}"
 data_dir="data/ShapeNetCore.v2.PC15k"
 
-python train.py \
+python -u train.py \
     --log_name ${log_name} \
     --lr ${lr} \
     --dataset_type ${ds} \
@@ -26,10 +33,11 @@ python train.py \
     --batch_size ${batch_size} \
     --zdim ${zdim} \
     --epochs ${epochs} \
-    --save_freq 50 \
-    --viz_freq 1 \
-    --log_freq 1 \
-    --val_freq 10 \
+    --save_freq 20 \
+    --viz_freq 100 \
+    --log_freq 10 \
+    --val_freq 100 \
+    --max_validate_shapes 100 \
     --distributed \
     --use_deterministic_encoder \
     --prior_weight 0 \

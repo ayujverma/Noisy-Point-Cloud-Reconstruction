@@ -58,7 +58,7 @@ mkdir -p logs output checkpoints
 # Run Autoencoder training script
 # ------------------------------
 # The script automatically detects multiple GPUs if CUDA_VISIBLE_DEVICES is not set restrictedly.
-bash ./scripts/shapenet_chair_ae_dist.sh
+bash ./scripts/shapenet_chair_ae_dist.sh a100
 
 # ------------------------------
 # Job finished
