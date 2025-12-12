@@ -54,11 +54,27 @@ def load_model(ckpt_path, device):
     checkpoint = torch.load(ckpt_path, map_location=device)
     
     # Handle state dict key mismatch if necessary (e.g. 'module.' prefix)
-    state_dict = checkpoint['state_dict']
+    if isinstance(checkpoint, dict):
+        if 'state_dict' in checkpoint:
+            state_dict = checkpoint['state_dict']
+        elif 'model' in checkpoint:
+            state_dict = checkpoint['model']
+        else:
+            state_dict = checkpoint
+    else:
+        state_dict = checkpoint
+
     new_state_dict = {}
     for k, v in state_dict.items():
-        name = k[7:] if k.startswith('module.') else k
+        # Robustly remove 'module' from the key path
+        parts = k.split('.')
+        new_parts = [p for p in parts if p != 'module']
+        name = '.'.join(new_parts)
         new_state_dict[name] = v
+    
+    # Debug: print first few keys to verify mapping
+    print("Original keys (first 3):", list(state_dict.keys())[:3])
+    print("Mapped keys (first 3):", list(new_state_dict.keys())[:3])
     
     model.load_state_dict(new_state_dict)
     model.to(device)
@@ -141,4 +157,3 @@ def visualize_point_clouds(pcs, titles, save_path=None):
         plt.close()
     else:
         plt.show()
-
