@@ -56,7 +56,7 @@ class Encoder(nn.Module):
             ms = F.relu(self.fc_bn1(self.fc1(x)))
             ms = F.relu(self.fc_bn2(self.fc2(ms)))
             ms = self.fc3(ms)
-            m, v = ms, 0
+            m, v = ms, torch.zeros_like(ms)
         else:
             m = F.relu(self.fc_bn1_m(self.fc1_m(x)))
             m = F.relu(self.fc_bn2_m(self.fc2_m(m)))
@@ -205,17 +205,33 @@ class PointFlow(nn.Module):
     def decode(self, z, num_points, truncate_std=None):
         # transform points from the prior to a point cloud, conditioned on a shape code
         y = self.sample_gaussian((z.size(0), num_points, self.input_dim), truncate_std)
-        x = self.point_cnf(y, z, reverse=True).view(*y.size())
+        y = y.to(z.device)
+        # Check if point_cnf is wrapped in DataParallel
+        if isinstance(self.point_cnf, nn.DataParallel):
+            x = self.point_cnf.module(y, z, reverse=True).view(*y.size())
+        else:
+            x = self.point_cnf(y, z, reverse=True).view(*y.size())
         return y, x
 
     def sample(self, batch_size, num_points, truncate_std=None, truncate_std_latent=None, gpu=None):
         assert self.use_latent_flow, "Sampling requires `self.use_latent_flow` to be True."
         # Generate the shape code from the prior
         w = self.sample_gaussian((batch_size, self.zdim), truncate_std_latent, gpu=gpu)
-        z = self.latent_cnf(w, None, reverse=True).view(*w.size())
+        if gpu is None:
+            w = w.to(next(self.parameters()).device)
+        # Check if latent_cnf is wrapped in DataParallel
+        if isinstance(self.latent_cnf, nn.DataParallel):
+            z = self.latent_cnf.module(w, None, reverse=True).view(*w.size())
+        else:
+            z = self.latent_cnf(w, None, reverse=True).view(*w.size())
         # Sample points conditioned on the shape code
         y = self.sample_gaussian((batch_size, num_points, self.input_dim), truncate_std, gpu=gpu)
-        x = self.point_cnf(y, z, reverse=True).view(*y.size())
+        y = y.to(z.device)
+        # Check if point_cnf is wrapped in DataParallel
+        if isinstance(self.point_cnf, nn.DataParallel):
+            x = self.point_cnf.module(y, z, reverse=True).view(*y.size())
+        else:
+            x = self.point_cnf(y, z, reverse=True).view(*y.size())
         return z, x
 
     def reconstruct(self, x, num_points=None, truncate_std=None):
@@ -223,3 +239,4 @@ class PointFlow(nn.Module):
         z = self.encode(x)
         _, x = self.decode(z, num_points, truncate_std)
         return x
+

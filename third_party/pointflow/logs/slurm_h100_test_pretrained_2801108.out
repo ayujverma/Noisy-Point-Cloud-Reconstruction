@@ -1,0 +1,30 @@
+============================================================================
+TESTING PRETRAINED CHAIR AE (H100 - 1 GPU)
+============================================================================
+Job started at: Fri Dec 12 05:36:49 CST 2025
+Job ID: 2801108
+Running on node: c318-003.ls6.tacc.utexas.edu
+============================================================================
+Setting up local scratch data...
+Found archive data/ShapeNetCore.v2.PC15k.zip. Copying and extracting to local scratch...
+Extracting zip file...
+Data copy complete.
+Testing checkpoint: pretrained_models/ae/chair/checkpoint.pt
+Number of trainable parameters of Point CNF: 927513
+Resume Path:pretrained_models/ae/chair/checkpoint.pt
+Total number of data:4612
+Min number of points: (train)2048 (test)2048
+Total number of data:662
+Min number of points: (train)2048 (test)2048
+Cate=chair Total Sample size:torch.Size([662, 2048, 3]) Ref size: torch.Size([662, 2048, 3])
+{'MMD-CD': 0.0010068247793242335, 'MMD-EMD': 0.04807636886835098}
+================================================================================
+All category results:
+================================================================================
+{'chair': {'MMD-CD': 0.0010068247793242335, 'MMD-EMD': 0.04807636886835098}}
+================================================================================
+Averaged results:
+{'MMD-CD': 0.0010068247793242335, 'MMD-EMD': 0.04807636886835098}
+================================================================================
+Cleaning up local data...
+Job finished at: Fri Dec 12 05:47:31 CST 2025
