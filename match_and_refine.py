@@ -4,7 +4,7 @@ import os
 import argparse
 from tqdm import tqdm
 import glob
-from poc_utils import load_model, save_ply, load_ply, Args
+from poc_utils import load_model, save_ply, load_ply, Args, visualize_point_clouds
 from third_party.pointflow.metrics.evaluation_metrics import distChamferCUDA
 
 def get_chamfer(x, y):
@@ -170,3 +170,16 @@ def main():
 
 if __name__ == '__main__':
     main()
+    # before_path = "/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/fake_real_136/X_before.ply"
+    # refined_path = "/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/fake_real_136/decoded_refined.ply"
+    # initial_path = "/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/fake_real_136/decoded_initial.ply"
+    # x_1 = load_ply(before_path)
+    # x_2 = load_ply(refined_path)
+    # x_3 = load_ply(initial_path)
+    # info = np.load("/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/fake_real_136/info.npy", allow_pickle=True).item()
+    # print(info)
+    # visualize_point_clouds(
+    #     [x_1, x_3, x_2],
+    #     ['Real Shape (Before)', 'Initial Decode', 'Refined Decode'],
+    #     save_path="/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/fake_real_136/visualization.png"
+    # )

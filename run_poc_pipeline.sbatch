@@ -65,6 +65,43 @@ REFINE_STEPS=300
 # Run Pipeline
 # ------------------------------
 
+echo "Setting up local scratch data..."
+TMP_DATA_DIR="/tmp/$SLURM_JOB_ID/data"
+mkdir -p $TMP_DATA_DIR
+
+# Path to the zip file in the repo
+ZIP_FILE="third_party/pointflow/data/ShapeNetCore.v2.PC15k.zip"
+
+if [ -f "$ZIP_FILE" ]; then
+    echo "Found archive $ZIP_FILE. Copying and extracting to local scratch..."
+    cp $ZIP_FILE $TMP_DATA_DIR/
+    
+    # Save current directory
+    PUSHD_DIR=$PWD
+    cd $TMP_DATA_DIR
+    
+    echo "Extracting zip file..."
+    unzip -q ShapeNetCore.v2.PC15k.zip
+    
+    # Return to original directory
+    cd $PUSHD_DIR
+else
+    echo "Archive $ZIP_FILE not found. Falling back to recursive copy (slower)..."
+    # Fallback path if zip is missing
+    DATA_SRC="third_party/pointflow/data/ShapeNetCore.v2.PC15k"
+    if [ -d "$DATA_SRC" ]; then
+        echo "Copying data from $DATA_SRC to $TMP_DATA_DIR..."
+        cp -r $DATA_SRC $TMP_DATA_DIR/
+    else
+        echo "Error: Data source not found at $ZIP_FILE or $DATA_SRC"
+        exit 1
+    fi
+fi
+
+# Chair category ID: 03001627
+# Using test set for real data simulation
+REAL_DATA_PATH="$TMP_DATA_DIR/ShapeNetCore.v2.PC15k/03001627/test"
+
 echo "Step 1: Sampling and Decoding..."
 python sample_and_decode.py \
     --ckpt "$CKPT_PATH" \
