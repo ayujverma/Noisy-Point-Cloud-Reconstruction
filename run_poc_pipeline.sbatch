@@ -8,7 +8,7 @@
 #SBATCH -t 04:00:00                  # Walltime (hh:mm:ss)
 #SBATCH -A ASC25079                  # Project/Allocation name
 #SBATCH --mail-type=ALL              # Send email at begin and end
-#SBATCH --mail-user=ayuj@utexas.edu  # Email for notifications
+#SBATCH --mail-user=maadhav_kothuri@utexas.edu  # Email for notifications
 
 # ------------------------------
 # Load system modules
@@ -20,7 +20,7 @@ module load gcc/9.4.0                # Load GCC 9.4.0
 # ------------------------------
 # Activate conda environment
 # ------------------------------
-source /work/10692/ayuj/miniconda3/etc/profile.d/conda.sh
+source /work/09634/maadhavk631/miniconda3/etc/profile.d/conda.sh
 conda activate PointFlow
 export PYTHONUNBUFFERED=1
 
@@ -46,7 +46,7 @@ echo "==========================================================================
 # Change to Repo Root
 # ------------------------------
 # Adjust this path if your repo root is different on TACC
-cd /work/10692/ayuj/Noisy-Point-Cloud-Reconstruction
+cd /work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction
 
 # ------------------------------
 # Create output directories

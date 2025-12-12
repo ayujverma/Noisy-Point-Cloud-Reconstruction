@@ -20,14 +20,14 @@ module load gcc/9.4.0
 # ------------------------------
 # Activate conda environment
 # ------------------------------
-source /work/10692/ayuj/miniconda3/etc/profile.d/conda.sh
+source /work/09634/maadhavk631/miniconda3/etc/profile.d/conda.sh
 conda activate PointFlow
 export PYTHONUNBUFFERED=1
 
 # ------------------------------
 # Change to Repo Root
 # ------------------------------
-cd /work/10692/ayuj/Noisy-Point-Cloud-Reconstruction
+cd /work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction
 
 # ------------------------------
 # Configuration
