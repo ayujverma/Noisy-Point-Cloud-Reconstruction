@@ -1,0 +1,26 @@
+/var/spool/slurmd/job2801623/slurm_script: line 23: /work/10692/ayuj/miniconda3/etc/profile.d/conda.sh: Permission denied
+
+CondaError: Run 'conda init' before 'conda activate'
+
+Traceback (most recent call last):
+  File "<stdin>", line 1, in <module>
+ModuleNotFoundError: No module named 'torch'
+/var/spool/slurmd/job2801623/slurm_script: line 49: cd: /work/10692/ayuj/Noisy-Point-Cloud-Reconstruction: Permission denied
+Traceback (most recent call last):
+  File "/work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/sample_and_decode.py", line 1, in <module>
+    import torch
+ModuleNotFoundError: No module named 'torch'
+Traceback (most recent call last):
+  File "/work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/match_and_refine.py", line 1, in <module>
+    import torch
+ModuleNotFoundError: No module named 'torch'
+Traceback (most recent call last):
+  File "/work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/track_correspondences.py", line 1, in <module>
+    import torch
+ModuleNotFoundError: No module named 'torch'
+Traceback (most recent call last):
+  File "/work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/visualize_and_metrics.py", line 7, in <module>
+    from poc_utils import load_ply, get_rainbow_colors
+  File "/work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/poc_utils.py", line 1, in <module>
+    import torch
+ModuleNotFoundError: No module named 'torch'

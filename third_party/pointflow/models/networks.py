@@ -239,3 +239,4 @@ class PointFlow(nn.Module):
         z = self.encode(x)
         _, x = self.decode(z, num_points, truncate_std)
         return x
+
