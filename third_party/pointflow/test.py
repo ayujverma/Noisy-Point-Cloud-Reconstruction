@@ -150,7 +150,10 @@ def main(args):
 
     print("Resume Path:%s" % args.resume_checkpoint)
     checkpoint = torch.load(args.resume_checkpoint)
-    model.load_state_dict(checkpoint)
+    if 'model' in checkpoint:
+        model.load_state_dict(checkpoint['model'])
+    else:
+        model.load_state_dict(checkpoint)
     model.eval()
 
     with torch.no_grad():

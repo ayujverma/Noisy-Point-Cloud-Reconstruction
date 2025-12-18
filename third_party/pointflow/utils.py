@@ -338,7 +338,7 @@ def validate(test_loader, model, epoch, writer, save_dir, args, clf_loaders=None
     if writer is not None and args.save_val_results:
         save_dir = os.path.join(save_dir, 'epoch-%d' % epoch)
         if not os.path.isdir(save_dir):
-            os.makedirs(save_dir)
+            os.makedirs(save_dir, exist_ok=True)
     else:
         save_dir = None
 
