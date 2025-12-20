@@ -4,7 +4,7 @@ import argparse
 import glob
 import pandas as pd
 import matplotlib.pyplot as plt
-from poc_utils import load_ply, get_rainbow_colors
+from poc_utils import load_ply, get_rainbow_colors, get_colors_by_coord
 
 def visualize_pair(pc1, pc2, title1, title2, save_path):
     fig = plt.figure(figsize=(10, 5))
@@ -12,13 +12,13 @@ def visualize_pair(pc1, pc2, title1, title2, save_path):
     # PC1
     ax1 = fig.add_subplot(1, 2, 1, projection='3d')
     if pc1 is not None:
-        colors1 = get_rainbow_colors(pc1.shape[0])
         # If pc1 is "raw", maybe we shouldn't use rainbow?
         # But if it's reordered, we should.
         # Let's assume if title says "Raw", use gray.
         if "Raw" in title1:
             ax1.scatter(pc1[:, 0], pc1[:, 2], pc1[:, 1], c='gray', s=2, alpha=0.5)
         else:
+            colors1 = get_colors_by_coord(pc1, axis=1)
             ax1.scatter(pc1[:, 0], pc1[:, 2], pc1[:, 1], c=colors1, s=2)
     ax1.set_title(title1)
     ax1.axis('off')
@@ -26,7 +26,7 @@ def visualize_pair(pc1, pc2, title1, title2, save_path):
     # PC2
     ax2 = fig.add_subplot(1, 2, 2, projection='3d')
     if pc2 is not None:
-        colors2 = get_rainbow_colors(pc2.shape[0])
+        colors2 = get_colors_by_coord(pc2, axis=1)
         ax2.scatter(pc2[:, 0], pc2[:, 2], pc2[:, 1], c=colors2, s=2)
     ax2.set_title(title2)
     ax2.axis('off')
@@ -72,34 +72,9 @@ def main():
         
         # Before: Raw vs Initial
         raw = load_ply(os.path.join(d, 'X_before.ply'))
-        print("Real Shape Stats")
-        print("shape", raw.shape)
-        print("min/max per axis", raw.min(axis=0), raw.max(axis=0))
-        print("mean/std", raw.mean(axis=0), raw.std(axis=0))
-        print("max radius", np.max(np.linalg.norm(raw - raw.mean(axis=0), axis=1)))
-        
          # Initial decoded
-        x = load_ply(os.path.join(d, 'decoded_initial.ply'))
-        print("Decoded Latent (unrefined)")
-        print("shape", x.shape)
-        print("min/max per axis", x.min(axis=0), x.max(axis=0))
-        print("mean/std", x.mean(axis=0), x.std(axis=0))
-        print("max radius", np.max(np.linalg.norm(x - x.mean(axis=0), axis=1)))
-
-        def normalize_points(pts):
-            c = pts.mean(axis=0)
-            pts_centered = pts - c
-            scale = np.max(np.linalg.norm(pts_centered, axis=1))
-            return pts_centered / scale, c, scale
-        x_norm, c, s = normalize_points(x)
-        print("After normalization:")
-        print("shape", x_norm.shape)
-        print("min/max per axis", x_norm.min(axis=0), x_norm.max(axis=0))
-        print("mean/std", x_norm.mean(axis=0), x_norm.std(axis=0))
-        print("max radius", np.max(np.linalg.norm(x_norm - x_norm.mean(axis=0), axis=1)))
-        initial = x_norm
-
-        visualize_pair(x, initial, "Raw Real", "Decoded Initial", os.path.join(d, 'before.png'))
+        initial = load_ply(os.path.join(d, 'decoded_initial.ply'))
+        visualize_pair(initial, initial, "Raw Real", "Decoded Initial", os.path.join(d, 'before.png'))
         
         # After: Reordered vs Refined
         if os.path.exists(os.path.join(d, 'X_reordered.ply')):

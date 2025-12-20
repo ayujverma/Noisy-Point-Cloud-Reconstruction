@@ -10,7 +10,7 @@ scratch.py
 
 .ipynb_checkpoints
 
-checkpoints
+# checkpoints
 runs
 
 metrics/structural_losses/*.so

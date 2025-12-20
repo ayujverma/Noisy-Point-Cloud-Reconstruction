@@ -2,6 +2,8 @@ import torch
 import numpy as np
 import os
 import argparse
+import matplotlib
+matplotlib.use('Agg') # Set backend for headless execution
 from tqdm import tqdm
 import glob
 from poc_utils import load_model, save_ply, load_ply, Args, visualize_point_clouds
@@ -56,7 +58,7 @@ def mean_knn_distance(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ckpt', type=str, required=False, help='Path to AE checkpoint')
+    parser.add_argument('--ckpt', type=str, required=True, help='Path to AE checkpoint')
     parser.add_argument('--decoded_dir', type=str, default='results/decoded', help='Directory with decoded samples')
     parser.add_argument('--real_data_path', type=str, help='Path to directory with real shape .ply/.npy files')
     parser.add_argument('--num_real', type=int, default=5, help='Number of real shapes to process')
@@ -64,7 +66,7 @@ def main():
     parser.add_argument('--steps', type=int, default=300, help='Refinement steps')
     parser.add_argument('--lambda_reg', type=float, default=1e-3, help='Regularization weight')
     parser.add_argument('--lambda-repulsion', type=float, default=1e-2, help='Repulsion regularization weight')
-    parser.add_argument('--device', type=str, default='cpu' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--generate_fake_real', action='store_true', help='Generate fake real shapes if no data provided')
     args = parser.parse_args()
@@ -212,19 +214,12 @@ def main():
         
         print(f"  Refined Chamfer: {info['chamfer_after']:.6f}")
 
+        # Visualize comparison
+        visualize_point_clouds(
+            [real_pts, decoded_initial, decoded_refined],
+            ['Real Shape', 'Initial Match', 'Refined Match'],
+            save_path=os.path.join(out_dir, 'comparison.png')
+        )
+
 if __name__ == '__main__':
-    # main()
-    name = "11a06e6f68b1d99c8687ff9b0b4e4ac"
-    before_path = f"/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/{name}/X_before.ply"
-    refined_path = f"/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/{name}/decoded_refined.ply"
-    initial_path = f"/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/{name}/decoded_initial.ply"
-    x_1 = load_ply(before_path)
-    x_2 = load_ply(refined_path)
-    x_3 = load_ply(initial_path)
-    info = np.load(f"/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/{name}/info.npy", allow_pickle=True).item()
-    print(info)
-    visualize_point_clouds(
-        [x_1, x_3, x_2],
-        ['Real Shape (Before)', 'Initial Decode', 'Refined Decode'],
-        save_path=f"/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/{name}/visualization.png"
-    )
+    main()

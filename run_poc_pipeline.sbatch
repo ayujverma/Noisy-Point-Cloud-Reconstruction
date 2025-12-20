@@ -8,7 +8,7 @@
 #SBATCH -t 04:00:00                  # Walltime (hh:mm:ss)
 #SBATCH -A ASC25079                  # Project/Allocation name
 #SBATCH --mail-type=ALL              # Send email at begin and end
-#SBATCH --mail-user=maadhav_kothuri@utexas.edu  # Email for notifications
+#SBATCH --mail-user=ayuj@utexas.edu  # Email for notifications
 
 # ------------------------------
 # Load system modules
@@ -20,7 +20,7 @@ module load gcc/9.4.0                # Load GCC 9.4.0
 # ------------------------------
 # Activate conda environment
 # ------------------------------
-source /work/09634/maadhavk631/miniconda3/etc/profile.d/conda.sh
+source /work/10692/ayuj/miniconda3/etc/profile.d/conda.sh
 conda activate PointFlow
 export PYTHONUNBUFFERED=1
 
@@ -46,7 +46,7 @@ echo "==========================================================================
 # Change to Repo Root
 # ------------------------------
 # Adjust this path if your repo root is different on TACC
-cd /work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction
+cd /work/10692/ayuj/Noisy-Point-Cloud-Reconstruction
 
 # ------------------------------
 # Create output directories
@@ -56,15 +56,15 @@ mkdir -p logs results
 # ------------------------------
 # Configuration
 # ------------------------------
-CKPT_PATH="third_party/pointflow/checkpoints/ae/shapenet15k-catechair-a100/checkpoint-latest.pt"
-NUM_SAMPLES=1000
-NUM_REAL=100
-REFINE_STEPS=300
+# Use the pretrained model instead of the potentially untrained/empty checkpoint
+CKPT_PATH="third_party/pointflow/pretrained_models/ae/chair/checkpoint.pt"
+NUM_SAMPLES=100
+NUM_REAL=10
+REFINE_STEPS=500
 
 # ------------------------------
-# Run Pipeline
+# I/O Optimization: Copy Dataset to /tmp
 # ------------------------------
-
 echo "Setting up local scratch data..."
 TMP_DATA_DIR="/tmp/$SLURM_JOB_ID/data"
 mkdir -p $TMP_DATA_DIR
@@ -102,6 +102,10 @@ fi
 # Using test set for real data simulation
 REAL_DATA_PATH="$TMP_DATA_DIR/ShapeNetCore.v2.PC15k/03001627/test"
 
+# ------------------------------
+# Run Pipeline
+# ------------------------------
+
 echo "Step 1: Sampling and Decoding..."
 python sample_and_decode.py \
     --ckpt "$CKPT_PATH" \
@@ -109,11 +113,9 @@ python sample_and_decode.py \
     --batch_size 50
 
 echo "Step 2: Matching and Refining..."
-# Note: Using --generate_fake_real for demo. 
-# If you have real data, replace with: --real_data_path "path/to/real/plys"
 python match_and_refine.py \
     --ckpt "$CKPT_PATH" \
-    --generate_fake_real \
+    --real_data_path "$REAL_DATA_PATH" \
     --num_real $NUM_REAL \
     --steps $REFINE_STEPS
 
@@ -124,6 +126,10 @@ python track_correspondences.py \
 
 echo "Step 4: Generating Visualizations and Metrics..."
 python visualize_and_metrics.py
+
+# Cleanup /tmp
+echo "Cleaning up local data..."
+rm -rf $TMP_DATA_DIR
 
 # ------------------------------
 # Job finished

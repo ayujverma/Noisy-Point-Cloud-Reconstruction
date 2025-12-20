@@ -127,6 +127,17 @@ def get_rainbow_colors(n_points):
     colors = cmap(np.linspace(0, 1, n_points))[:, :3]
     return colors
 
+def get_colors_by_coord(pc, axis=1):
+    """
+    Generate colors based on coordinate values along an axis.
+    """
+    import matplotlib.pyplot as plt
+    vals = pc[:, axis]
+    # Normalize to 0-1
+    vals = (vals - vals.min()) / (vals.max() - vals.min() + 1e-8)
+    cmap = plt.get_cmap("jet")
+    return cmap(vals)[:, :3]
+
 def visualize_point_clouds(pcs, titles, save_path=None):
     """
     Visualize list of point clouds side-by-side.
@@ -141,14 +152,10 @@ def visualize_point_clouds(pcs, titles, save_path=None):
     for i, (pc, title) in enumerate(zip(pcs, titles)):
         ax = fig.add_subplot(1, n, i+1, projection='3d')
         
-        # Color by index (y-axis or just index)
-        # Let's use rainbow gradient along one axis (e.g. x or y) or just index
-        colors = get_rainbow_colors(pc.shape[0])
+        # Color by spatial coordinate (e.g. Y axis)
+        colors = get_colors_by_coord(pc, axis=1)
         
-        # Reorder colors based on spatial coordinate for the first plot, 
-        # then use that ordering for others if we want to show correspondence?
-        # For now just scatter
-        ax.scatter(pc[:, 0], pc[:, 1], pc[:, 2], c=colors, s=2) # Swap Y and Z for better view usually
+        ax.scatter(pc[:, 0], pc[:, 2], pc[:, 1], c=colors, s=2) # Swap Y and Z for better view usually
         ax.set_title(title)
         ax.axis('off')
         
@@ -157,3 +164,4 @@ def visualize_point_clouds(pcs, titles, save_path=None):
         plt.close()
     else:
         plt.show()
+

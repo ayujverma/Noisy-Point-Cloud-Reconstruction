@@ -4,13 +4,12 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 import warnings
-import torch.distributed
 import numpy as np
 import random
 import faulthandler
 import torch.multiprocessing as mp
 import time
-# import scipy.misc
+import datetime
 import matplotlib.pyplot as plt
 from models.networks import PointFlow
 from torch import optim
@@ -29,24 +28,29 @@ def main_worker(gpu, save_dir, ngpus_per_node, args):
     args.gpu = gpu
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
+    
+    # Verify data directory
+    print(f"[Rank {args.rank}] Loading data from: {args.data_dir}")
 
     if args.distributed:
         if args.dist_url == "env://" and args.rank == -1:
             args.rank = int(os.environ["RANK"])
-        if args.distributed:
-            args.rank = args.rank * ngpus_per_node + gpu
+        args.rank = args.rank * ngpus_per_node + gpu
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
-                                world_size=args.world_size, rank=args.rank)
+                                world_size=args.world_size, rank=args.rank,
+                                timeout=datetime.timedelta(minutes=60))
 
     if args.log_name is not None:
         log_dir = "runs/%s" % args.log_name
     else:
         log_dir = "runs/time-%d" % time.time()
 
-    if not args.distributed or (args.rank % ngpus_per_node == 0):
-        writer = SummaryWriter(logdir=log_dir)
-    else:
-        writer = None
+    # Disable TensorBoard writer to avoid I/O bottlenecks
+    writer = None
+    # if not args.distributed or (args.rank == 0):
+    #     writer = SummaryWriter(logdir=log_dir)
+    # else:
+    #     writer = None
 
     if not args.use_latent_flow:  # auto-encoder only
         args.prior_weight = 0
@@ -58,7 +62,7 @@ def main_worker(gpu, save_dir, ngpus_per_node, args):
         if args.gpu is not None:
             def _transform_(m):
                 return nn.parallel.DistributedDataParallel(
-                    m, device_ids=[args.gpu], output_device=args.gpu, check_reduction=True)
+                    m, device_ids=[args.gpu], output_device=args.gpu)
 
             torch.cuda.set_device(args.gpu)
             model.cuda(args.gpu)
@@ -94,8 +98,10 @@ def main_worker(gpu, save_dir, ngpus_per_node, args):
     tr_dataset, te_dataset = get_datasets(args)
     if args.distributed:
         train_sampler = torch.utils.data.distributed.DistributedSampler(tr_dataset)
+        test_sampler = torch.utils.data.distributed.DistributedSampler(te_dataset, shuffle=False)
     else:
         train_sampler = None
+        test_sampler = None
 
     train_loader = torch.utils.data.DataLoader(
         dataset=tr_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
@@ -103,11 +109,11 @@ def main_worker(gpu, save_dir, ngpus_per_node, args):
         worker_init_fn=init_np_seed)
     test_loader = torch.utils.data.DataLoader(
         dataset=te_dataset, batch_size=args.batch_size, shuffle=False,
-        num_workers=0, pin_memory=True, drop_last=False,
+        num_workers=0, pin_memory=True, drop_last=False, sampler=test_sampler,
         worker_init_fn=init_np_seed)
 
     # save dataset statistics
-    if not args.distributed or (args.rank % ngpus_per_node == 0):
+    if not args.distributed or (args.rank == 0):
         np.save(os.path.join(save_dir, "train_set_mean.npy"), tr_dataset.all_points_mean)
         np.save(os.path.join(save_dir, "train_set_std.npy"), tr_dataset.all_points_std)
         np.save(os.path.join(save_dir, "train_set_idx.npy"), np.array(tr_dataset.shuffle_idx))
@@ -133,16 +139,19 @@ def main_worker(gpu, save_dir, ngpus_per_node, args):
     else:
         clf_loaders = None
 
-    # initialize the learning rate scheduler
+    for group in optimizer.param_groups:
+        if 'initial_lr' not in group:
+            group['initial_lr'] = args.lr
+
     if args.scheduler == 'exponential':
-        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, args.exp_decay)
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, args.exp_decay, last_epoch=start_epoch - 1)
     elif args.scheduler == 'step':
-        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.epochs // 2, gamma=0.1)
+        scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=args.epochs // 2, gamma=0.1, last_epoch=start_epoch - 1)
     elif args.scheduler == 'linear':
         def lambda_rule(ep):
             lr_l = 1.0 - max(0, ep - 0.5 * args.epochs) / float(0.5 * args.epochs)
             return lr_l
-        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule)
+        scheduler = optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_rule, last_epoch=start_epoch - 1)
     else:
         assert 0, "args.schedulers should be either 'exponential' or 'linear'"
 
@@ -154,16 +163,11 @@ def main_worker(gpu, save_dir, ngpus_per_node, args):
     if args.distributed:
         print("[Rank %d] World size : %d" % (args.rank, dist.get_world_size()))
 
-    print("Start epoch: %d End epoch: %d" % (start_epoch, args.epochs))
+    if args.rank == 0:
+        print("Start epoch: %d End epoch: %d" % (start_epoch, args.epochs))
     for epoch in range(start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
-
-        # adjust the learning rate
-        if (epoch + 1) % args.exp_decay_freq == 0:
-            scheduler.step(epoch=epoch)
-            if writer is not None:
-                writer.add_scalar('lr/optimizer', scheduler.get_lr()[0], epoch)
 
         # train for one epoch
         for bidx, data in enumerate(train_loader):
@@ -174,7 +178,11 @@ def main_worker(gpu, save_dir, ngpus_per_node, args):
                 tr_batch, _, _ = apply_random_rotation(
                     tr_batch, rot_axis=train_loader.dataset.gravity_axis)
             inputs = tr_batch.cuda(args.gpu, non_blocking=True)
-            out = model(inputs, optimizer, step, writer)
+            
+            # Only write to TensorBoard every log_freq steps to avoid I/O bottlenecks on Rank 0
+            current_writer = writer if step % args.log_freq == 0 else None
+            out = model(inputs, optimizer, step, current_writer)
+            
             entropy, prior_nats, recon_nats = out['entropy'], out['prior_nats'], out['recon_nats']
             entropy_avg_meter.update(entropy)
             point_nats_avg_meter.update(recon_nats)
@@ -182,9 +190,16 @@ def main_worker(gpu, save_dir, ngpus_per_node, args):
             if step % args.log_freq == 0:
                 duration = time.time() - start_time
                 start_time = time.time()
-                print("[Rank %d] Epoch %d Batch [%2d/%2d] Time [%3.2fs] Entropy %2.5f LatentNats %2.5f PointNats %2.5f"
-                      % (args.rank, epoch, bidx, len(train_loader), duration, entropy_avg_meter.avg,
-                         latent_nats_avg_meter.avg, point_nats_avg_meter.avg))
+                if args.rank == 0:
+                    print("[Rank %d] Epoch %d Batch [%2d/%2d] Time [%3.2fs] Entropy %2.5f LatentNats %2.5f PointNats %2.5f"
+                          % (args.rank, epoch, bidx, len(train_loader), duration, entropy_avg_meter.avg,
+                             latent_nats_avg_meter.avg, point_nats_avg_meter.avg))
+
+        # adjust the learning rate
+        if (epoch + 1) % args.exp_decay_freq == 0:
+            scheduler.step()
+            if writer is not None:
+                writer.add_scalar('lr/optimizer', scheduler.get_last_lr()[0], epoch)
 
         # evaluate on the validation set
         if not args.no_validation and (epoch + 1) % args.val_freq == 0:
@@ -193,17 +208,16 @@ def main_worker(gpu, save_dir, ngpus_per_node, args):
 
         # save visualizations
         if (epoch + 1) % args.viz_freq == 0:
-            # reconstructions
             model.eval()
             samples = model.reconstruct(inputs)
             results = []
             for idx in range(min(10, inputs.size(0))):
                 res = visualize_point_clouds(samples[idx], inputs[idx], idx,
-                                             pert_order=train_loader.dataset.display_axis_order)
+                                                pert_order=train_loader.dataset.display_axis_order)
                 results.append(res)
             res = np.concatenate(results, axis=1)
             plt.imsave(os.path.join(save_dir, 'images', 'tr_vis_conditioned_epoch%d-gpu%s.png' % (epoch, args.gpu)),
-                              res.transpose((1, 2, 0)))
+                                res.transpose((1, 2, 0)))
             if writer is not None:
                 writer.add_image('tr_vis/conditioned', torch.as_tensor(res), epoch)
 
@@ -215,21 +229,22 @@ def main_worker(gpu, save_dir, ngpus_per_node, args):
                 results = []
                 for idx in range(num_samples):
                     res = visualize_point_clouds(samples[idx], inputs[idx], idx,
-                                                 pert_order=train_loader.dataset.display_axis_order)
+                                                    pert_order=train_loader.dataset.display_axis_order)
                     results.append(res)
                 res = np.concatenate(results, axis=1)
                 plt.imsave(os.path.join(save_dir, 'images', 'tr_vis_conditioned_epoch%d-gpu%s.png' % (epoch, args.gpu)),
-                                  res.transpose((1, 2, 0)))
+                                    res.transpose((1, 2, 0)))
                 if writer is not None:
                     writer.add_image('tr_vis/sampled', torch.as_tensor(res), epoch)
-
         # save checkpoints
-        if not args.distributed or (args.rank % ngpus_per_node == 0):
-            if (epoch + 1) % args.save_freq == 0:
+        if (epoch + 1) % args.save_freq == 0:
+            if not args.distributed or (args.rank == 0):
                 save(model, optimizer, epoch + 1,
                      os.path.join(save_dir, 'checkpoint-%d.pt' % epoch))
                 save(model, optimizer, epoch + 1,
                      os.path.join(save_dir, 'checkpoint-latest.pt'))
+            if args.distributed:
+                dist.barrier()
 
     if writer is not None:
         writer.close()
@@ -240,8 +255,8 @@ def main():
     args = get_args()
     save_dir = os.path.join("checkpoints", args.log_name)
     if not os.path.exists(save_dir):
-        os.makedirs(save_dir)
-        os.makedirs(os.path.join(save_dir, 'images'))
+        os.makedirs(save_dir, exist_ok=True)
+        os.makedirs(os.path.join(save_dir, 'images'), exist_ok=True)
 
     with open(os.path.join(save_dir, 'command.sh'), 'w') as f:
         f.write('python -X faulthandler ' + ' '.join(sys.argv))
