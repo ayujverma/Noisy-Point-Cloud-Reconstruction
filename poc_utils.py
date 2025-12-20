@@ -148,7 +148,7 @@ def visualize_point_clouds(pcs, titles, save_path=None):
         # Reorder colors based on spatial coordinate for the first plot, 
         # then use that ordering for others if we want to show correspondence?
         # For now just scatter
-        ax.scatter(pc[:, 0], pc[:, 2], pc[:, 1], c=colors, s=2) # Swap Y and Z for better view usually
+        ax.scatter(pc[:, 0], pc[:, 1], pc[:, 2], c=colors, s=2) # Swap Y and Z for better view usually
         ax.set_title(title)
         ax.axis('off')
         

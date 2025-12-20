@@ -51,6 +51,7 @@ def main():
     metrics_list = []
     
     for d in shape_dirs:
+        print("Processing", d)
         info = np.load(os.path.join(d, 'info.npy'), allow_pickle=True).item()
         
         # Calculate average point displacement for reordered
@@ -71,14 +72,41 @@ def main():
         
         # Before: Raw vs Initial
         raw = load_ply(os.path.join(d, 'X_before.ply'))
-        initial = load_ply(os.path.join(d, 'decoded_initial.ply'))
-        visualize_pair(raw, initial, "Raw Real", "Decoded Initial", os.path.join(d, 'before.png'))
+        print("Real Shape Stats")
+        print("shape", raw.shape)
+        print("min/max per axis", raw.min(axis=0), raw.max(axis=0))
+        print("mean/std", raw.mean(axis=0), raw.std(axis=0))
+        print("max radius", np.max(np.linalg.norm(raw - raw.mean(axis=0), axis=1)))
+        
+         # Initial decoded
+        x = load_ply(os.path.join(d, 'decoded_initial.ply'))
+        print("Decoded Latent (unrefined)")
+        print("shape", x.shape)
+        print("min/max per axis", x.min(axis=0), x.max(axis=0))
+        print("mean/std", x.mean(axis=0), x.std(axis=0))
+        print("max radius", np.max(np.linalg.norm(x - x.mean(axis=0), axis=1)))
+
+        def normalize_points(pts):
+            c = pts.mean(axis=0)
+            pts_centered = pts - c
+            scale = np.max(np.linalg.norm(pts_centered, axis=1))
+            return pts_centered / scale, c, scale
+        x_norm, c, s = normalize_points(x)
+        print("After normalization:")
+        print("shape", x_norm.shape)
+        print("min/max per axis", x_norm.min(axis=0), x_norm.max(axis=0))
+        print("mean/std", x_norm.mean(axis=0), x_norm.std(axis=0))
+        print("max radius", np.max(np.linalg.norm(x_norm - x_norm.mean(axis=0), axis=1)))
+        initial = x_norm
+
+        visualize_pair(x, initial, "Raw Real", "Decoded Initial", os.path.join(d, 'before.png'))
         
         # After: Reordered vs Refined
         if os.path.exists(os.path.join(d, 'X_reordered.ply')):
             reordered = load_ply(os.path.join(d, 'X_reordered.ply'))
             refined = load_ply(os.path.join(d, 'decoded_refined.ply'))
             visualize_pair(reordered, refined, "Reordered Real", "Decoded Refined", os.path.join(d, 'after.png'))
+        break
             
     # Save metrics CSV
     df = pd.DataFrame(metrics_list)

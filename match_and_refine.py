@@ -16,16 +16,55 @@ def get_chamfer(x, y):
     dl, dr = distChamferCUDA(x, y)
     return dl.mean(1) + dr.mean(1)
 
+
+def mean_knn_distance(
+    points: torch.Tensor,
+    k: int = 8,
+    batch_size: int = 32,
+    device: str = "cpu",
+):
+    """
+    points: (M, N, 3) tensor of point clouds
+    returns: (M,) tensor of mean kNN distances
+    """
+
+    points = points.to(device)
+    M, N, _ = points.shape
+
+    means = []
+
+    with torch.no_grad():
+        for i in range(0, M, batch_size):
+            pc = points[i:i + batch_size]          # (B, N, 3)
+            B = pc.shape[0]
+
+            # Pairwise distances: (B, N, N)
+            dists = torch.cdist(pc, pc, p=2)
+
+            # Ignore self-distance
+            eye = torch.eye(N, device=pc.device).unsqueeze(0)
+            dists = dists + eye * 1e6
+
+            # k nearest neighbors
+            knn_dists, _ = torch.topk(dists, k, dim=-1, largest=False)
+
+            # Mean over points and neighbors
+            mean_knn = knn_dists.mean(dim=[1, 2])  # (B,)
+            means.append(mean_knn.cpu())
+
+    return torch.cat(means, dim=0)
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--ckpt', type=str, required=True, help='Path to AE checkpoint')
+    parser.add_argument('--ckpt', type=str, required=False, help='Path to AE checkpoint')
     parser.add_argument('--decoded_dir', type=str, default='results/decoded', help='Directory with decoded samples')
     parser.add_argument('--real_data_path', type=str, help='Path to directory with real shape .ply/.npy files')
     parser.add_argument('--num_real', type=int, default=5, help='Number of real shapes to process')
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate for refinement')
     parser.add_argument('--steps', type=int, default=300, help='Refinement steps')
     parser.add_argument('--lambda_reg', type=float, default=1e-3, help='Regularization weight')
-    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument('--lambda-repulsion', type=float, default=1e-2, help='Repulsion regularization weight')
+    parser.add_argument('--device', type=str, default='cpu' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--seed', type=int, default=42)
     parser.add_argument('--generate_fake_real', action='store_true', help='Generate fake real shapes if no data provided')
     args = parser.parse_args()
@@ -35,7 +74,7 @@ def main():
     np.random.seed(args.seed)
 
     # Load model
-    model = load_model(args.ckpt, args.device)
+    # model = load_model(args.ckpt, args.device)
     
     # Load decoded samples
     print("Loading decoded samples...")
@@ -52,7 +91,8 @@ def main():
     real_names = []
     
     if args.real_data_path and os.path.exists(args.real_data_path):
-        files = glob.glob(os.path.join(args.real_data_path, '*.ply')) + glob.glob(os.path.join(args.real_data_path, '*.npy'))
+        # files = glob.glob(os.path.join(args.real_data_path, '*.ply')) + glob.glob(os.path.join(args.real_data_path, '*.npy'))
+        files = glob.glob(os.path.join(args.real_data_path, 'X_before.ply'))
         files = sorted(files)[:args.num_real]
         for f in files:
             if f.endswith('.ply'):
@@ -99,10 +139,13 @@ def main():
         batch_size = 100
         min_dists = []
         
+
         with torch.no_grad():
             for j in range(0, len(decoded_shapes), batch_size):
+                print(f"  Batch {j//batch_size}/{len(decoded_shapes)//batch_size}")
                 batch_decoded = decoded_shapes_torch[j:j+batch_size]
                 batch_real = real_pts_torch.repeat(batch_decoded.size(0), 1, 1)
+                # dist = get_chamfer(batch_real, batch_decoded) + args.lambda_repulsion * mean_knn_distance(batch_decoded, k=8, batch_size=batch_size, device=args.device)
                 dist = get_chamfer(batch_real, batch_decoded)
                 min_dists.append(dist)
         
@@ -114,6 +157,7 @@ def main():
         
         z_init = latents_torch[best_idx].clone().unsqueeze(0) # (1, zdim)
         decoded_initial = decoded_shapes[best_idx]
+        print("Saving initial decoded shape...")
         save_ply(decoded_initial, os.path.join(out_dir, 'decoded_initial.ply'))
         
         # 2. Refine latent
@@ -169,17 +213,18 @@ def main():
         print(f"  Refined Chamfer: {info['chamfer_after']:.6f}")
 
 if __name__ == '__main__':
-    main()
-    # before_path = "/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/fake_real_136/X_before.ply"
-    # refined_path = "/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/fake_real_136/decoded_refined.ply"
-    # initial_path = "/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/fake_real_136/decoded_initial.ply"
-    # x_1 = load_ply(before_path)
-    # x_2 = load_ply(refined_path)
-    # x_3 = load_ply(initial_path)
-    # info = np.load("/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/fake_real_136/info.npy", allow_pickle=True).item()
-    # print(info)
-    # visualize_point_clouds(
-    #     [x_1, x_3, x_2],
-    #     ['Real Shape (Before)', 'Initial Decode', 'Refined Decode'],
-    #     save_path="/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/fake_real_136/visualization.png"
-    # )
+    # main()
+    name = "11a06e6f68b1d99c8687ff9b0b4e4ac"
+    before_path = f"/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/{name}/X_before.ply"
+    refined_path = f"/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/{name}/decoded_refined.ply"
+    initial_path = f"/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/{name}/decoded_initial.ply"
+    x_1 = load_ply(before_path)
+    x_2 = load_ply(refined_path)
+    x_3 = load_ply(initial_path)
+    info = np.load(f"/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/{name}/info.npy", allow_pickle=True).item()
+    print(info)
+    visualize_point_clouds(
+        [x_1, x_3, x_2],
+        ['Real Shape (Before)', 'Initial Decode', 'Refined Decode'],
+        save_path=f"/Users/maadhavkothuri/Documents/UT Austin Fall 2025/CS395T/FinalProject/Noisy-Point-Cloud-Reconstruction/results/{name}/visualization.png"
+    )

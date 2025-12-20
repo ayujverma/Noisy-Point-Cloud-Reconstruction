@@ -11,7 +11,7 @@ def main():
     parser.add_argument('--num_samples', type=int, default=1000, help='Number of latent samples')
     parser.add_argument('--num_points', type=int, default=2048, help='Number of points per shape')
     parser.add_argument('--batch_size', type=int, default=50, help='Batch size for decoding')
-    parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument('--device', type=str, default='cpu' if torch.cuda.is_available() else 'cpu')
     parser.add_argument('--seed', type=int, default=42)
     args = parser.parse_args()
 
@@ -37,8 +37,7 @@ def main():
     with torch.no_grad():
         for i in tqdm(range(0, args.num_samples, args.batch_size)):
             batch_z = latents[i:i+args.batch_size]
-            current_batch_size = batch_z.size(0)
-            
+            current_batch_size = batch_z.size(0)            
             # Expand m to batch size
             batch_y = fixed_y.repeat(current_batch_size, 1, 1)
             
