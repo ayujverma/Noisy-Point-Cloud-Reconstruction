@@ -1,0 +1,9 @@
+Encoding training examples and saving latents
+cuda
+Creating dataset
+Found 2832 files
+Number of trainable parameters of Point CNF: 927513
+Loading checkpoint from /work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/models/checkpoint-latest.pt
+Original keys (first 3): ['encoder.module.conv1.weight', 'encoder.module.conv1.bias', 'encoder.module.conv2.weight']
+Mapped keys (first 3): ['encoder.conv1.weight', 'encoder.conv1.bias', 'encoder.conv2.weight']
+Encoding finished.

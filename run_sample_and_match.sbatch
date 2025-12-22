@@ -8,7 +8,7 @@
 #SBATCH -t 00:30:00                  # Walltime (hh:mm:ss)
 #SBATCH -A ASC25079                  # Project/Allocation name
 #SBATCH --mail-type=ALL              # Send email at begin and end
-#SBATCH --mail-user=ayuj@utexas.edu  # Email for notifications
+#SBATCH --mail-user=maadhav_kothuri@utexas.edu  # Email for notifications
 
 # ------------------------------
 # Load system modules

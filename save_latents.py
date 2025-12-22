@@ -1,3 +1,4 @@
+from collections import defaultdict
 from poc_utils import load_model
 import os
 import numpy as np
@@ -5,6 +6,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import argparse
 
+# python save_latents.py --chkpt /work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/models/checkpoint-latest.pt  --dataset /work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/third_party/pointflow/data/ShapeNetCore.v2.PC15k/02691156/train/ --savepath $start
 class AirplaneDataset(Dataset):
     def __init__(self, root):
         self.root = root
@@ -38,7 +40,7 @@ def main():
     args = parser.parse_args()
 
     dataset = AirplaneDataset(args.dataset)
-    model = load_model(args.chkpt)
+    model = load_model(args.chkpt, args.device)
     model.eval()
 
     loader = DataLoader(
@@ -49,29 +51,38 @@ def main():
         pin_memory=True
     )
 
-    latents = {}
+    latents = defaultdict(list)
     with torch.no_grad():
         i = 1
         for batch in loader:
             batch = batch.to(args.device)
             if isinstance(model.encoder, torch.nn.DataParallel):
-                x = model.encoder.module(batch, reverse=True)
+                x = model.encoder.module(batch)
             else:
-                x = model.encoder(batch, reverse=True)
-            latents["std"].append(x["std"].cpu().numpy())
-            latents["mean"].append(x["mean"].cpu().numpy())
-            print("Processed batch {}".format(i))
+                x = model.encoder(batch)
+            mu, logvar = x[0], x[1]
+            if isinstance(model.latent_cnf, torch.nn.DataParallel):
+                z = model.latent_cnf.module(mu)
+            else:
+                z = model.latent_cnf(mu)
+            latents["raw_mean"].append(mu.detach().cpu().numpy())
+            latents["raw_std"].append(logvar.detach().cpu().numpy())
+            latents["latent"].append(z.detach().cpu().numpy())
+            print("Processed batch {}/{}".format(i, len(loader)))
             i += 1
     
     
-    latent_means = np.concatenate(latents["mean"].detach().cpu().numpy(), axis=0)
-    latent_stds = np.concatenate(latents["std"].detach().cpu().numpy(), axis=0)
+    latent_means = np.concatenate(latents["raw_mean"], axis=0)
+    latent_stds = np.concatenate(latents["raw_std"], axis=0)
+    latent_values = np.concatenate(latents["latent"], axis=0)
     np.savez(
         os.path.join(args.savepath, "airplane_latents_all.npz"),
         mu=latent_means,      # (N, latent_dim)
-        std=latent_stds     # (N, latent_dim)
+        std=latent_stds,     # (N, latent_dim)
+        latents=latent_values  # (N, latent_dim)
     )
     print("Saved latents to {}".format(os.path.join(args.savepath, "airplane_latents_all.npz")))
 
 if __name__ == "__main__":
     main()
+
