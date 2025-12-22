@@ -1,8 +1,28 @@
-import numpy
-import argparse
+from poc_utils import load_model
 import os
-from poc_utils import load_model, load_data, load_data_idx, save_data
+import numpy as np
 import torch
+from torch.utils.data import Dataset, DataLoader
+import argparse
+
+class AirplaneDataset(Dataset):
+    def __init__(self, root):
+        self.root = root
+        self.files = sorted([
+            f for f in os.listdir(root)
+            if f.endswith(".npy")
+        ])
+        print("Found {} files".format(len(self.files)))
+
+    def __len__(self):
+        return len(self.files)
+
+    def __getitem__(self, idx):
+        fname = self.files[idx]
+        path = os.path.join(self.root, fname)
+
+        pc = np.load(path).astype(np.float32)
+        return torch.from_numpy(pc)
 
 # Load indexes from train_set_idx
 #Pass through model and get mean and std
@@ -10,31 +30,48 @@ import torch
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--trainpath', type=str, required = True, default=None)
     parser.add_argument('--chkpt', type=str, required = True, default=None)
     parser.add_argument('--dataset', type=str, required = True, default=None)
-    parser.add_argument('--batch_size', type=int, required = False, default=128)
+    parser.add_argument('--batch_size', type=int, required = False, default=32)
     parser.add_argument('--savepath', type=str, required = True, default=None)
+    parser.add_argument('--device', type=str, required=False, default="cuda" if torch.cuda.is_available() else "cpu")
     args = parser.parse_args()
 
-    train_set_idx = numpy.load(os.path.join(args.trainpath, "train_set_idx.npy"))
+    dataset = AirplaneDataset(args.dataset)
     model = load_model(args.chkpt)
-    train_set, _ = load_data_idx(args.dataset, train_set_idx)
-    train_set = torch.tensor(train_set)
+    model.eval()
+
+    loader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,      # tune based on VRAM
+        shuffle=False,
+        num_workers=4,
+        pin_memory=True
+    )
+
+    latents = {}
+    with torch.no_grad():
+        i = 1
+        for batch in loader:
+            batch = batch.to(args.device)
+            if isinstance(model.encoder, torch.nn.DataParallel):
+                x = model.encoder.module(batch, reverse=True)
+            else:
+                x = model.encoder(batch, reverse=True)
+            latents["std"].append(x["std"].cpu().numpy())
+            latents["mean"].append(x["mean"].cpu().numpy())
+            print("Processed batch {}".format(i))
+            i += 1
     
-    latent_means = []
-    latent_stds = []
-    print("train_set.shape", train_set.shape)
-    for batch_idx in range(0, len(train_set), args.batch_size):
-        batch = train_set[batch_idx:batch_idx+args.batch_size]
-        output = model(batch)
-        latent_means.append(output['mean'].cpu().numpy())
-        latent_stds.append(output['logvar'].cpu().numpy())
     
-    latent_means = numpy.concatenate(latent_means, axis=0)
-    latent_stds = numpy.concatenate(latent_stds, axis=0)
-    save_data(args.savepath, latent_means, "latent_means.npy")
-    save_data(args.savepath, latent_stds, "latent_stds.npy")
+    latent_means = np.concatenate(latents["mean"].detach().cpu().numpy(), axis=0)
+    latent_stds = np.concatenate(latents["std"].detach().cpu().numpy(), axis=0)
+    np.savez(
+        os.path.join(args.savepath, "airplane_latents_all.npz"),
+        mu=latent_means,      # (N, latent_dim)
+        std=latent_stds     # (N, latent_dim)
+    )
+    print("Saved latents to {}".format(os.path.join(args.savepath, "airplane_latents_all.npz")))
 
 if __name__ == "__main__":
     main()

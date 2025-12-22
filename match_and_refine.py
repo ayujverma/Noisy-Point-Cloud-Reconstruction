@@ -76,7 +76,7 @@ def main():
     np.random.seed(args.seed)
 
     # Load model
-    # model = load_model(args.ckpt, args.device)
+    model = load_model(args.ckpt, args.device)
     
     # Load decoded samples
     print("Loading decoded samples...")
