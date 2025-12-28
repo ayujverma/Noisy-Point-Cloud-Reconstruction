@@ -25,25 +25,32 @@ def main():
     out_dir = os.path.join('results', 'decoded')
     os.makedirs(out_dir, exist_ok=True)
 
-    pc1 = load_ply(os.path.join('results/decoded', 'sample_0.ply'))
-    pc2 = load_ply(os.path.join('results/decoded', 'sample_1.ply'))
-    pc3 = load_ply(os.path.join('results/decoded', 'sample_2.ply'))
-    visualize_point_clouds([pc1, pc2, pc3], ['latent1', 'latent2', 'latent3'], out_dir)
-    return
 
     # Sample latents from N(0, I)
     zdim = model.zdim
-    print(f"Sampling {args.num_samples} latents with dim {zdim}...")
-    sample_latents = np.load(args.latent_path)["latents"]
-    latent_indices = torch.randperm(sample_latents.shape[0])[:args.num_samples]
-    print("Using latent indices:", latent_indices)
-    latents = torch.tensor(sample_latents[latent_indices], dtype=torch.float32).to(args.device)
+    # print(f"Sampling {args.num_samples} latents with dim {zdim}...")
+    # sample_latents = np.load(args.latent_path)
+    # z_mean = torch.from_numpy(sample_latents["mu"].mean(0)).unsqueeze(0)
+    # z_std = torch.from_numpy(sample_latents["std"].std(0)).unsqueeze(0)
+    # print("mean shape:", z_mean.shape, "std shape:", z_std.shape)
+    if args.device == 'cpu':
+        gpu = None
+    else:
+        gpu = args.device
+
+    rands = torch.randn(args.num_samples, zdim).to(args.device)
+    print("rand shape", rands.shape)
+    # latent_indices = torch.randperm(sample_latents.shape[0])[:args.num_samples]
+    # print("Using latent indices:", latent_indices)
+    # latents = torch.tensor(sample_latents[latent_indices], dtype=torch.float32).to(args.device)
+    latents = model.sample_gaussian((args.num_samples, zdim), gpu = gpu)
+    print("Latents shape:", latents.shape)
     
     # Decode in batches
     decoded_shapes = []
     
     # Sample fixed_y (shape this based on each latent)
-    fixed_y = torch.randn(1, args.num_points, 3).to(args.device)
+    fixed_y = model.sample_gaussian((1, args.num_points, model.input_dim), gpu = gpu)
     
     print("Decoding...")
     with torch.no_grad():
@@ -52,6 +59,7 @@ def main():
             current_batch_size = batch_z.size(0)            
             # Expand m to batch size
             batch_y = fixed_y.repeat(current_batch_size, 1, 1)
+            print("batch_y shape:", batch_y.shape, "batch_z shape:", batch_z.shape)
             
             # Decode: x = point_cnf(y, z, reverse=True)
             if isinstance(model.point_cnf, torch.nn.DataParallel):
@@ -69,8 +77,15 @@ def main():
     np.save(os.path.join(out_dir, 'fixed_y.npy'), fixed_y.cpu().numpy()) # Save the canonical points too
     
     # Save a few PLYs for inspection
+    viz = []
+    titles = []
     for i in range(min(10, args.num_samples)):
         save_ply(decoded_shapes[i], os.path.join(out_dir, f'sample_{i}.ply'))
+        if i < 3:
+            viz.append(load_ply(os.path.join(out_dir, f'sample_{i}.ply')))
+            titles.append(f'Sample {i}')
+    print("Visualizing point clouds...")
+    visualize_point_clouds(viz, titles, save_path=os.path.join(out_dir, 'samples.png'))
         
     print(f"Saved results to {out_dir}")
 

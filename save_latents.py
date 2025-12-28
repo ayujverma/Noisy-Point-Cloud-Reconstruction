@@ -1,12 +1,12 @@
 from collections import defaultdict
-from poc_utils import load_model
+from poc_utils import load_model, load_ply, save_ply, visualize_point_clouds
 import os
 import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 import argparse
 
-# python save_latents.py --chkpt /work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/models/checkpoint-latest.pt  --dataset /work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/third_party/pointflow/data/ShapeNetCore.v2.PC15k/02691156/train/ --savepath $start
+# python save_latents.py --chkpt /work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/models/checkpoint-latest.pt  --dataset /work/09634/maadhavk631/Noisy-Point-Cloud-Reconstruction/third_party/pointflow/data/ShapeNetCore.v2.PC15k/02691156/train/ --savepath $start/results
 class AirplaneDataset(Dataset):
     def __init__(self, root):
         self.root = root
@@ -41,6 +41,7 @@ def main():
 
     dataset = AirplaneDataset(args.dataset)
     model = load_model(args.chkpt, args.device)
+    # model.use_latent_flow = True
     model.eval()
 
     loader = DataLoader(
@@ -50,10 +51,17 @@ def main():
         num_workers=4,
         pin_memory=True
     )
+    num_latents = 1
 
     latents = defaultdict(list)
     with torch.no_grad():
         i = 1
+        # for i in range(num_latents):
+        #     latent, shape = model.sample(1, 2048)
+        #     save_ply(os.path.join(args.savepath, f"decoded_latent{i}.ply"))
+        #     pc = load_ply(os.path.join(args.savepath, f"decoded_latent{i}.ply"))
+        #     visualize_point_clouds([pc], os.path.join(args.savepath, f"decoded_latent{i}.png"))
+
         for batch in loader:
             batch = batch.to(args.device)
             if isinstance(model.encoder, torch.nn.DataParallel):
@@ -62,14 +70,15 @@ def main():
                 x = model.encoder(batch)
             mu, logvar = x[0], x[1]
             if isinstance(model.latent_cnf, torch.nn.DataParallel):
-                z = model.latent_cnf.module(mu)
+                z = model.latent_cnf.module(mu, reverse=True).view(*mu.shape[0])
             else:
-                z = model.latent_cnf(mu)
+                z = model.latent_cnf(mu, reverse = True).view(*mu.shape[0])
             latents["raw_mean"].append(mu.detach().cpu().numpy())
             latents["raw_std"].append(logvar.detach().cpu().numpy())
             latents["latent"].append(z.detach().cpu().numpy())
             print("Processed batch {}/{}".format(i, len(loader)))
             i += 1
+
     
     
     latent_means = np.concatenate(latents["raw_mean"], axis=0)
