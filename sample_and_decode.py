@@ -21,7 +21,7 @@ def main():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
     np.random.seed(args.seed)
-    model = load_model(args.ckpt, args.device, args_type='latent')
+    model = load_model(args.ckpt, args.device, use_latent_flow=True)
 
     # model = PointFlow(get_default_args())
     # model = model.cuda() if args.device != 'cpu' else model.cpu()
