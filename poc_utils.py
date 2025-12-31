@@ -15,6 +15,33 @@ class Args:
         for k, v in kwargs.items():
             setattr(self, k, v)
 
+# def get_latent_args():
+#     return Args(
+#         input_dim=3,
+#         dims='512-512-512',
+#         latent_dims='256-256',
+#         num_blocks=1,
+#         latent_num_blocks=1,
+#         layer_type='concatsquash',
+#         time_length=0.5,
+#         train_T=True,
+#         nonlinearity='tanh',
+#         use_adjoint=True,
+#         solver='dopri5',
+#         atol=1e-5,
+#         rtol=1e-5,
+#         batch_norm=True,
+#         sync_bn=False,
+#         bn_lag=0,
+#         use_latent_flow=True,
+#         use_deterministic_encoder=True,
+#         zdim=128,
+#         prior_weight=0,
+#         recon_weight=1,
+#         entropy_weight=0,
+#         distributed=False
+#     )
+
 def get_default_args():
     # Arguments from command.sh
     # dims 512-512-512 --latent_dims 256-256 --num_blocks 1 --latent_num_blocks 1 --zdim 128 
@@ -45,11 +72,8 @@ def get_default_args():
         distributed=False
     )
 
-def load_model(ckpt_path, device):
-    args = get_default_args()
-    model = PointFlow(args)
-    
-    # Load checkpoint
+def load_model(ckpt_path, device, use_latent_flow=False, use_deterministic_encoder=True):
+    # Load checkpoint first to inspect structure
     print(f"Loading checkpoint from {ckpt_path}")
     checkpoint = torch.load(ckpt_path, map_location=device)
     
@@ -71,6 +95,26 @@ def load_model(ckpt_path, device):
         new_parts = [p for p in parts if p != 'module']
         name = '.'.join(new_parts)
         new_state_dict[name] = v
+
+    # Auto-detect encoder type
+    has_deterministic = any('encoder.fc1.weight' in k for k in new_state_dict.keys())
+    has_probabilistic = any('encoder.fc1_m.weight' in k for k in new_state_dict.keys())
+    
+    if has_probabilistic:
+        print("Detected probabilistic encoder in checkpoint. Setting use_deterministic_encoder=False.")
+        use_deterministic_encoder = False
+    elif has_deterministic:
+        print("Detected deterministic encoder in checkpoint. Setting use_deterministic_encoder=True.")
+        use_deterministic_encoder = True
+    
+    # Auto-detect latent flow
+    has_latent_flow = any('latent_cnf.chain' in k for k in new_state_dict.keys())
+    if has_latent_flow:
+        print("Detected latent flow in checkpoint. Setting use_latent_flow=True.")
+        use_latent_flow = True
+    
+    args = get_default_args(use_latent_flow=use_latent_flow, use_deterministic_encoder=use_deterministic_encoder)
+    model = PointFlow(args)
     
     # Debug: print first few keys to verify mapping
     print("Original keys (first 3):", list(state_dict.keys())[:3])

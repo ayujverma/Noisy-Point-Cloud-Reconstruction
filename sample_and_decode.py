@@ -4,6 +4,7 @@ import os
 import argparse
 from tqdm import tqdm
 from poc_utils import load_model, save_ply, Args, load_ply, visualize_point_clouds
+from third_party.pointflow.models.networks import PointFlow
 
 # python sample_and_decode.py --ckpt $start/models/checkpoint-latest.pt --latent_path $start/airplane_latents_all.npz --num_samples 3 --num_points 2048
 def main():
@@ -20,7 +21,13 @@ def main():
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
     np.random.seed(args.seed)
-    model = load_model(args.ckpt, args.device)
+    model = load_model(args.ckpt, args.device, args_type='latent')
+
+    # model = PointFlow(get_default_args())
+    # model = model.cuda() if args.device != 'cpu' else model.cpu()
+    # model.eval()
+    # chkpt = torch.load(args.ckpt)
+    # model.load_state_dict(chkpt["model"])
 
     out_dir = os.path.join('results', 'decoded')
     os.makedirs(out_dir, exist_ok=True)
@@ -43,6 +50,8 @@ def main():
     # latent_indices = torch.randperm(sample_latents.shape[0])[:args.num_samples]
     # print("Using latent indices:", latent_indices)
     # latents = torch.tensor(sample_latents[latent_indices], dtype=torch.float32).to(args.device)
+    print("Using latent flow? ", model.use_latent_flow)
+    return
     latents = model.sample_gaussian((args.num_samples, zdim), gpu = gpu)
     print("Latents shape:", latents.shape)
     
@@ -55,7 +64,9 @@ def main():
     print("Decoding...")
     with torch.no_grad():
         for i in tqdm(range(0, args.num_samples, args.batch_size)):
-            batch_z = latents[i:i+args.batch_size]
+            # batch_z = latents[i:i+args.batch_size]
+            latent_gaussian = model.sample_gaussian((args.batch_size, zdim), gpu = gpu)
+            batch_z = model.latent_cnf(latent_gaussian, None, reverse=True).view(*latent_gaussian.size())
             current_batch_size = batch_z.size(0)            
             # Expand m to batch size
             batch_y = fixed_y.repeat(current_batch_size, 1, 1)
