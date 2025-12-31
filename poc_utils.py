@@ -42,7 +42,7 @@ class Args:
 #         distributed=False
 #     )
 
-def get_default_args():
+def get_default_args(use_latent_flow=False, use_deterministic_encoder=True):
     # Arguments from command.sh
     # dims 512-512-512 --latent_dims 256-256 --num_blocks 1 --latent_num_blocks 1 --zdim 128 
     # --use_deterministic_encoder --prior_weight 0 --entropy_weight 0
@@ -63,8 +63,8 @@ def get_default_args():
         batch_norm=True,
         sync_bn=False,
         bn_lag=0,
-        use_latent_flow=False,
-        use_deterministic_encoder=True,
+        use_latent_flow=use_latent_flow,
+        use_deterministic_encoder=use_deterministic_encoder,
         zdim=128,
         prior_weight=0,
         recon_weight=1,
