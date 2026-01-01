@@ -10,7 +10,6 @@ from third_party.pointflow.models.networks import PointFlow
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--ckpt', type=str, required=True, help='Path to AE checkpoint')
-    parser.add_argument('--latent_path', type=str, required = True, default=None, help='Path to precomputed latents')
     parser.add_argument('--num_samples', type=int, default=1000, help='Number of latent samples')
     parser.add_argument('--num_points', type=int, default=2048, help='Number of points per shape')
     parser.add_argument('--batch_size', type=int, default=50, help='Batch size for decoding')
@@ -23,23 +22,12 @@ def main():
     np.random.seed(args.seed)
     model = load_model(args.ckpt, args.device, use_latent_flow=True)
 
-    # model = PointFlow(get_default_args())
-    # model = model.cuda() if args.device != 'cpu' else model.cpu()
-    # model.eval()
-    # chkpt = torch.load(args.ckpt)
-    # model.load_state_dict(chkpt["model"])
-
     out_dir = os.path.join('results', 'decoded')
     os.makedirs(out_dir, exist_ok=True)
 
 
     # Sample latents from N(0, I)
     zdim = model.zdim
-    # print(f"Sampling {args.num_samples} latents with dim {zdim}...")
-    # sample_latents = np.load(args.latent_path)
-    # z_mean = torch.from_numpy(sample_latents["mu"].mean(0)).unsqueeze(0)
-    # z_std = torch.from_numpy(sample_latents["std"].std(0)).unsqueeze(0)
-    # print("mean shape:", z_mean.shape, "std shape:", z_std.shape)
     if args.device == 'cpu':
         gpu = None
     else:
@@ -47,11 +35,7 @@ def main():
 
     rands = torch.randn(args.num_samples, zdim).to(args.device)
     print("rand shape", rands.shape)
-    # latent_indices = torch.randperm(sample_latents.shape[0])[:args.num_samples]
-    # print("Using latent indices:", latent_indices)
-    # latents = torch.tensor(sample_latents[latent_indices], dtype=torch.float32).to(args.device)
     print("Using latent flow? ", model.use_latent_flow)
-    return
     latents = model.sample_gaussian((args.num_samples, zdim), gpu = gpu)
     print("Latents shape:", latents.shape)
     
@@ -64,7 +48,6 @@ def main():
     print("Decoding...")
     with torch.no_grad():
         for i in tqdm(range(0, args.num_samples, args.batch_size)):
-            # batch_z = latents[i:i+args.batch_size]
             latent_gaussian = model.sample_gaussian((args.batch_size, zdim), gpu = gpu)
             batch_z = model.latent_cnf(latent_gaussian, None, reverse=True).view(*latent_gaussian.size())
             current_batch_size = batch_z.size(0)            
@@ -72,7 +55,6 @@ def main():
             batch_y = fixed_y.repeat(current_batch_size, 1, 1)
             print("batch_y shape:", batch_y.shape, "batch_z shape:", batch_z.shape)
             
-            # Decode: x = point_cnf(y, z, reverse=True)
             if isinstance(model.point_cnf, torch.nn.DataParallel):
                 x = model.point_cnf.module(batch_y, batch_z, reverse=True).view(*batch_y.size())
             else:
